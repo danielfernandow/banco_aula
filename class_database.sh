@@ -1,7 +1,13 @@
 #!/bin/bash
+
+# Este script importa uma estrutura de banco de dados PostgreSQL a partir de um arquivo SQL
+# gerado internamente. Ele solicita ao usuário as credenciais de conexão necessárias.
+
 echo "🚀 Importando estrutura do banco da aula..."
 
-# Criar estrutura
+# --- Cria o arquivo SQL com a estrutura do banco ---
+# A sintaxe 'cat > NOME_ARQUIVO << EOF' é usada para criar um arquivo com o conteúdo
+# que segue, até que a palavra 'EOF' seja encontrada.
 cat > estrutura_aula.sql << 'EOF'
 --
 -- PostgreSQL database dump
@@ -414,37 +420,57 @@ CREATE TRIGGER trg_update_event_timestamps BEFORE UPDATE ON public.leads FOR EAC
 --
 EOF
 
-# Pedir dados para o usuário
+# --- Coleta de dados do usuário ---
+echo "Por favor, informe os dados de conexão com o banco de dados:"
+
+# Solicita o host, com 'localhost' como valor padrão se nada for digitado
 read -p "Digite o host do PostgreSQL (padrão: localhost): " DB_HOST
 DB_HOST=${DB_HOST:-localhost}
 
+# Solicita a porta, com '5432' como valor padrão
 read -p "Digite a porta do PostgreSQL (padrão: 5432): " DB_PORT
 DB_PORT=${DB_PORT:-5432}
 
+# Solicita o nome do banco de dados e não continua enquanto o valor não for preenchido
 read -p "Digite o nome do banco de dados: " DB_NAME
 while [ -z "$DB_NAME" ]; do
-  echo "O nome do banco não pode ser vazio."
+  echo "O nome do banco de dados não pode ser vazio."
   read -p "Digite o nome do banco de dados: " DB_NAME
 done
 
+# Solicita o nome de usuário e não continua enquanto o valor não for preenchido
 read -p "Digite o usuário do PostgreSQL: " DB_USER
 while [ -z "$DB_USER" ]; do
   echo "O usuário não pode ser vazio."
   read -p "Digite o usuário do PostgreSQL: " DB_USER
 done
 
+# Solicita a senha de forma segura (não exibe na tela)
+# O comando `read -s` faz a leitura "silenciosa"
 read -s -p "Digite a senha do PostgreSQL: " DB_PASS
-echo
+echo # Adiciona uma nova linha para formatação, já que a senha não quebra a linha
 
-# Importar a estrutura
+# --- Execução do Comando ---
+# Exporta a senha para uma variável de ambiente que o psql reconhece.
+# Esta é uma forma segura de passar a senha sem que ela apareça no histórico de comandos.
 export PGPASSWORD=$DB_PASS
+
+echo "⏳ Conectando e importando a estrutura. Aguarde..."
+
+# Executa o comando psql para importar o arquivo .sql gerado
 psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" < estrutura_aula.sql
 
+# Verifica se o comando anterior foi executado com sucesso
 if [ $? -eq 0 ]; then
-  echo "🎉 Estrutura importada com sucesso!"
+  echo "✅ Estrutura do banco de dados importada com sucesso!"
 else
-  echo "❌ Falha ao importar a estrutura."
+  echo "❌ Falha ao importar a estrutura. Verifique as credenciais e a conexão."
 fi
 
-# Limpar variável de ambiente da senha
+# --- Limpeza ---
+# Remove a variável de ambiente com a senha por segurança.
 unset PGPASSWORD
+
+# Remove o arquivo SQL temporário
+rm estrutura_aula.sql
+echo "🧹 Limpeza concluída."
