@@ -414,47 +414,37 @@ CREATE TRIGGER trg_update_event_timestamps BEFORE UPDATE ON public.leads FOR EAC
 --
 EOF
 
-echo "🔍 Detectando PostgreSQL..."
+# Pedir dados para o usuário
+read -p "Digite o host do PostgreSQL (padrão: localhost): " DB_HOST
+DB_HOST=${DB_HOST:-localhost}
 
-# Tentar conectar com configurações padrão mais comuns
-CONFIGS=(
-    "localhost:5432:postgres:postgres"
-    "localhost:5432:postgres:root" 
-    "localhost:5433:postgres:postgres"
-    "127.0.0.1:5432:postgres:postgres"
-)
+read -p "Digite a porta do PostgreSQL (padrão: 5432): " DB_PORT
+DB_PORT=${DB_PORT:-5432}
 
-SUCCESS=false
-
-for config in "${CONFIGS[@]}"; do
-    IFS=':' read -r host porta usuario database <<< "$config"
-    
-    echo "🔧 Tentando: $host:$porta com usuário $usuario..."
-    
-    # Testar conexão (sem senha primeiro)
-    if PGPASSWORD="" psql -h $host -p $porta -U $usuario -d $database -c "\q" 2>/dev/null; then
-        echo "✅ Conectado! Importando estrutura..."
-        PGPASSWORD="" psql -h $host -p $porta -U $usuario -d $database < estrutura_aula.sql
-        SUCCESS=true
-        break
-    fi
-    
-    # Testar com senhas comuns
-    for senha in "postgres" "root" "123456" ""; do
-        if PGPASSWORD="$senha" psql -h $host -p $porta -U $usuario -d $database -c "\q" 2>/dev/null; then
-            echo "✅ Conectado com senha! Importando estrutura..."
-            PGPASSWORD="$senha" psql -h $host -p $porta -U $usuario -d $database < estrutura_aula.sql
-            SUCCESS=true
-            break 2
-        fi
-    done
+read -p "Digite o nome do banco de dados: " DB_NAME
+while [ -z "$DB_NAME" ]; do
+  echo "O nome do banco não pode ser vazio."
+  read -p "Digite o nome do banco de dados: " DB_NAME
 done
 
-if [ "$SUCCESS" = true ]; then
-    echo "🎉 Estrutura importada com sucesso!"
-    echo "📊 Suas tabelas estão prontas para uso!"
+read -p "Digite o usuário do PostgreSQL: " DB_USER
+while [ -z "$DB_USER" ]; do
+  echo "O usuário não pode ser vazio."
+  read -p "Digite o usuário do PostgreSQL: " DB_USER
+done
+
+read -s -p "Digite a senha do PostgreSQL: " DB_PASS
+echo
+
+# Importar a estrutura
+export PGPASSWORD=$DB_PASS
+psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" < estrutura_aula.sql
+
+if [ $? -eq 0 ]; then
+  echo "🎉 Estrutura importada com sucesso!"
 else
-    echo "❌ Não consegui conectar automaticamente."
-    echo "📋 Execute manualmente:"
-    echo "   psql -h localhost -U seu_usuario -d seu_banco < estrutura_aula.sql"
+  echo "❌ Falha ao importar a estrutura."
 fi
+
+# Limpar variável de ambiente da senha
+unset PGPASSWORD
