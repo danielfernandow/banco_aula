@@ -1,24 +1,13 @@
 #!/bin/bash
 
-# Este script importa uma estrutura de banco de dados PostgreSQL a partir de um arquivo SQL
-# gerado internamente. Ele solicita ao usuário as credenciais de conexão necessárias.
+# Este script foi projetado para ser executado DENTRO de um container Docker do PostgreSQL.
+# Ele assume que está sendo executado pelo usuário 'postgres' e irá importar
+# a estrutura para um banco de dados especificado pelo usuário.
 
-# --- Verificação de Dependências ---
-# Verifica se o comando 'psql' está disponível no sistema antes de prosseguir.
-if ! command -v psql &> /dev/null; then
-    echo "❌ Erro: O comando 'psql' não foi encontrado."
-    echo "Por favor, instale o cliente PostgreSQL para continuar."
-    echo "Em sistemas baseados em Debian/Ubuntu, use: sudo apt-get update && sudo apt-get install -y postgresql-client"
-    exit 1
-fi
+echo "🚀 Gerando arquivo de estrutura SQL dentro do container..."
 
-
-echo "🚀 Importando estrutura do banco da aula..."
-
-# --- Cria o arquivo SQL com a estrutura do banco ---
-# A sintaxe 'cat > NOME_ARQUIVO << EOF' é usada para criar um arquivo com o conteúdo
-# que segue, até que a palavra 'EOF' seja encontrada.
-cat > estrutura_aula.sql << 'EOF'
+# --- Cria o arquivo SQL com a estrutura do banco no diretório /tmp ---
+cat > /tmp/estrutura_aula.sql << 'EOF'
 --
 -- PostgreSQL database dump
 --
@@ -431,49 +420,26 @@ CREATE TRIGGER trg_update_event_timestamps BEFORE UPDATE ON public.leads FOR EAC
 EOF
 
 # --- Coleta de dados do usuário ---
-echo "Por favor, informe os dados necessários para a conexão."
-
-# Define os valores padrão para host, porta e usuário
-DB_HOST="localhost"
-DB_PORT="5432"
-DB_USER="postgres"
-echo "Usando valores padrão:"
-echo "  Host: $DB_HOST"
-echo "  Porta: $DB_PORT"
-echo "  Usuário: $DB_USER"
-echo
-
-# Solicita o nome do banco de dados e não continua enquanto o valor não for preenchido
-read -p "Digite o nome do banco de dados: " DB_NAME
+# Pede apenas o nome do banco, pois as outras credenciais não são necessárias dentro do container.
+read -p "Digite o nome do banco de dados ALVO (deve existir): " DB_NAME
 while [ -z "$DB_NAME" ]; do
   echo "O nome do banco de dados não pode ser vazio."
-  read -p "Digite o nome do banco de dados: " DB_NAME
+  read -p "Digite o nome do banco de dados ALVO (deve existir): " DB_NAME
 done
 
-# Solicita a senha de forma segura (não exibe na tela)
-read -s -p "Digite a senha para o usuário '$DB_USER': " DB_PASS
-echo # Adiciona uma nova linha para formatação
+echo "⏳ Importando estrutura para o banco '$DB_NAME'. Aguarde..."
 
-# --- Execução do Comando ---
-# Exporta a senha para uma variável de ambiente que o psql reconhece.
-export PGPASSWORD=$DB_PASS
-
-echo "⏳ Conectando e importando a estrutura. Aguarde..."
-
-# Executa o comando psql para importar o arquivo .sql gerado
-psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" < estrutura_aula.sql
+# Executa psql sem host, usuário ou senha, pois está sendo executado localmente como usuário postgres.
+psql -v ON_ERROR_STOP=1 -d "$DB_NAME" < /tmp/estrutura_aula.sql
 
 # Verifica se o comando anterior foi executado com sucesso
 if [ $? -eq 0 ]; then
   echo "✅ Estrutura do banco de dados importada com sucesso!"
 else
-  echo "❌ Falha ao importar a estrutura. Verifique as credenciais e a conexão."
+  echo "❌ Falha ao importar a estrutura. Verifique se o banco '$DB_NAME' existe e se você tem permissão."
 fi
 
 # --- Limpeza ---
-# Remove a variável de ambiente com a senha por segurança.
-unset PGPASSWORD
-
-# Remove o arquivo SQL temporário
-rm estrutura_aula.sql
+rm /tmp/estrutura_aula.sql
 echo "🧹 Limpeza concluída."
+
