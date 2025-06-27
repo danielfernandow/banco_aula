@@ -3,7 +3,6 @@ echo "🚀 Importando estrutura do banco da aula..."
 
 # Criar estrutura
 cat > estrutura_aula.sql << 'EOF'
-
 --
 -- PostgreSQL database dump
 --
@@ -413,10 +412,6 @@ CREATE TRIGGER trg_update_event_timestamps BEFORE UPDATE ON public.leads FOR EAC
 --
 -- PostgreSQL database dump complete
 --
-
-
-
-
 EOF
 
 echo "🔍 Detectando PostgreSQL..."
