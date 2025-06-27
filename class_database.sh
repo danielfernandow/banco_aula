@@ -3,6 +3,16 @@
 # Este script importa uma estrutura de banco de dados PostgreSQL a partir de um arquivo SQL
 # gerado internamente. Ele solicita ao usuário as credenciais de conexão necessárias.
 
+# --- Verificação de Dependências ---
+# Verifica se o comando 'psql' está disponível no sistema antes de prosseguir.
+if ! command -v psql &> /dev/null; then
+    echo "❌ Erro: O comando 'psql' não foi encontrado."
+    echo "Por favor, instale o cliente PostgreSQL para continuar."
+    echo "Em sistemas baseados em Debian/Ubuntu, use: sudo apt-get update && sudo apt-get install -y postgresql-client"
+    exit 1
+fi
+
+
 echo "🚀 Importando estrutura do banco da aula..."
 
 # --- Cria o arquivo SQL com a estrutura do banco ---
