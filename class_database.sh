@@ -431,15 +431,17 @@ CREATE TRIGGER trg_update_event_timestamps BEFORE UPDATE ON public.leads FOR EAC
 EOF
 
 # --- Coleta de dados do usuário ---
-echo "Por favor, informe os dados de conexão com o banco de dados:"
+echo "Por favor, informe os dados necessários para a conexão."
 
-# Solicita o host, com 'localhost' como valor padrão se nada for digitado
-read -p "Digite o host do PostgreSQL (padrão: localhost): " DB_HOST
-DB_HOST=${DB_HOST:-localhost}
-
-# Solicita a porta, com '5432' como valor padrão
-read -p "Digite a porta do PostgreSQL (padrão: 5432): " DB_PORT
-DB_PORT=${DB_PORT:-5432}
+# Define os valores padrão para host, porta e usuário
+DB_HOST="localhost"
+DB_PORT="5432"
+DB_USER="postgres"
+echo "Usando valores padrão:"
+echo "  Host: $DB_HOST"
+echo "  Porta: $DB_PORT"
+echo "  Usuário: $DB_USER"
+echo
 
 # Solicita o nome do banco de dados e não continua enquanto o valor não for preenchido
 read -p "Digite o nome do banco de dados: " DB_NAME
@@ -448,21 +450,12 @@ while [ -z "$DB_NAME" ]; do
   read -p "Digite o nome do banco de dados: " DB_NAME
 done
 
-# Solicita o nome de usuário e não continua enquanto o valor não for preenchido
-read -p "Digite o usuário do PostgreSQL: " DB_USER
-while [ -z "$DB_USER" ]; do
-  echo "O usuário não pode ser vazio."
-  read -p "Digite o usuário do PostgreSQL: " DB_USER
-done
-
 # Solicita a senha de forma segura (não exibe na tela)
-# O comando `read -s` faz a leitura "silenciosa"
-read -s -p "Digite a senha do PostgreSQL: " DB_PASS
-echo # Adiciona uma nova linha para formatação, já que a senha não quebra a linha
+read -s -p "Digite a senha para o usuário '$DB_USER': " DB_PASS
+echo # Adiciona uma nova linha para formatação
 
 # --- Execução do Comando ---
 # Exporta a senha para uma variável de ambiente que o psql reconhece.
-# Esta é uma forma segura de passar a senha sem que ela apareça no histórico de comandos.
 export PGPASSWORD=$DB_PASS
 
 echo "⏳ Conectando e importando a estrutura. Aguarde..."
