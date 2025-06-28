@@ -27,207 +27,108 @@ SET client_min_messages = warning;
 SET row_security = off;
 
 --
--- Name: clean_phone_number(text); Type: FUNCTION; Schema: public; Owner: postgres
+-- Name: insere_followup_control(); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
-CREATE FUNCTION public.clean_phone_number(phone_input text) RETURNS text
+CREATE FUNCTION public.insere_followup_control() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 DECLARE
-    cleaned_phone TEXT;
-    phone_length INTEGER;
+  intervalo INTEGER := 1;  -- valor padrão
 BEGIN
-    -- Se o input for NULL ou vazio, retornar NULL
-    IF phone_input IS NULL OR TRIM(phone_input) = '' THEN
-        RETURN NULL;
-    END IF;
-    
-    -- Remover todos os caracteres não numéricos
-    cleaned_phone := REGEXP_REPLACE(phone_input, '[^0-9]', '', 'g');
-    phone_length := LENGTH(cleaned_phone);
-    
-    -- Se já começa com 55, remover para reprocessar
-    IF LEFT(cleaned_phone, 2) = '55' THEN
-        cleaned_phone := SUBSTRING(cleaned_phone, 3);
-        phone_length := LENGTH(cleaned_phone);
-    END IF;
-    
-    -- Agora processar o número sem o 55
-    CASE 
-        -- Se tem 11 dígitos: DDD + 9 + 8 dígitos (remover o 9 extra)
-        WHEN phone_length = 11 AND SUBSTRING(cleaned_phone, 3, 1) = '9' THEN
-            cleaned_phone := SUBSTRING(cleaned_phone, 1, 2) || SUBSTRING(cleaned_phone, 4);
-            
-        -- Se tem 10 dígitos: DDD + 8 dígitos (já está correto)
-        WHEN phone_length = 10 THEN
-            -- Já está no formato correto
-            cleaned_phone := cleaned_phone;
-            
-        -- Se tem 9 dígitos: pode ser DDD incompleto + número, manter como está
-        WHEN phone_length = 9 THEN
-            cleaned_phone := cleaned_phone;
-            
-        -- Outros casos: manter como está
-        ELSE
-            cleaned_phone := cleaned_phone;
-    END CASE;
-    
-    -- SEMPRE adicionar o 55 no início
-    cleaned_phone := '55' || cleaned_phone;
-    
-    RETURN cleaned_phone;
-END;
-$$;
+  -- Tenta buscar intervalo_dias na config
+  SELECT intervalo_dias INTO intervalo FROM config WHERE id = 1;
 
-
-ALTER FUNCTION public.clean_phone_number(phone_input text) OWNER TO postgres;
-
---
--- Name: set_follow_up_docs_pendente_01_at(); Type: FUNCTION; Schema: public; Owner: postgres
---
-
-CREATE FUNCTION public.set_follow_up_docs_pendente_01_at() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-  IF NEW.follow_up_docs_pendente_01 IS DISTINCT FROM OLD.follow_up_docs_pendente_01
-     AND NEW.follow_up_docs_pendente_01 = TRUE THEN
-    NEW.follow_up_docs_pendente_01_at := (NOW() AT TIME ZONE 'America/Sao_Paulo');
-  END IF;
-  RETURN NEW;
-END;
-$$;
-
-
-ALTER FUNCTION public.set_follow_up_docs_pendente_01_at() OWNER TO postgres;
-
---
--- Name: set_follow_up_docs_pendente_02_at(); Type: FUNCTION; Schema: public; Owner: postgres
---
-
-CREATE FUNCTION public.set_follow_up_docs_pendente_02_at() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-  IF NEW.follow_up_docs_pendente_02 IS DISTINCT FROM OLD.follow_up_docs_pendente_02
-     AND NEW.follow_up_docs_pendente_02 = TRUE THEN
-    NEW.follow_up_docs_pendente_02_at := (NOW() AT TIME ZONE 'America/Sao_Paulo');
-  END IF;
-  RETURN NEW;
-END;
-$$;
-
-
-ALTER FUNCTION public.set_follow_up_docs_pendente_02_at() OWNER TO postgres;
-
---
--- Name: set_updated_at(); Type: FUNCTION; Schema: public; Owner: postgres
---
-
-CREATE FUNCTION public.set_updated_at() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$BEGIN
-  NEW.updated_at := (NOW() AT TIME ZONE 'America/Sao_Paulo');
-  RETURN NEW;
-END;$$;
-
-
-ALTER FUNCTION public.set_updated_at() OWNER TO postgres;
-
---
--- Name: update_all_phone_numbers(); Type: FUNCTION; Schema: public; Owner: postgres
---
-
-CREATE FUNCTION public.update_all_phone_numbers() RETURNS integer
-    LANGUAGE plpgsql
-    AS $$
-DECLARE
-    updated_count INTEGER;
-BEGIN
-    -- Atualizar todos os números de telefone na tabela
-    UPDATE coldlist 
-    SET phone = clean_phone_number(phone)
-    WHERE phone IS NOT NULL;
-    
-    -- Pegar o número de linhas afetadas
-    GET DIAGNOSTICS updated_count = ROW_COUNT;
-    
-    RETURN updated_count;
-END;
-$$;
-
-
-ALTER FUNCTION public.update_all_phone_numbers() OWNER TO postgres;
-
---
--- Name: update_event_timestamps(); Type: FUNCTION; Schema: public; Owner: postgres
---
-
-CREATE FUNCTION public.update_event_timestamps() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-  IF NEW.material_sent IS DISTINCT FROM OLD.material_sent AND NEW.material_sent = TRUE THEN
-    NEW.send_materials_at := (NOW() AT TIME ZONE 'America/Sao_Paulo');
+  -- Se não encontrar (NULL), mantém o padrão 1
+  IF intervalo IS NULL THEN
+    intervalo := 1;
   END IF;
 
-  IF NEW.send_follow_up_01 IS DISTINCT FROM OLD.send_follow_up_01 AND NEW.send_follow_up_01 = TRUE THEN
-    NEW.send_follow_up_01_at := (NOW() AT TIME ZONE 'America/Sao_Paulo');
-  END IF;
-
-  IF NEW.send_follow_up_02 IS DISTINCT FROM OLD.send_follow_up_02 AND NEW.send_follow_up_02 = TRUE THEN
-    NEW.send_follow_up_02_at := (NOW() AT TIME ZONE 'America/Sao_Paulo');
-  END IF;
-
-  IF NEW.send_follow_up_03 IS DISTINCT FROM OLD.send_follow_up_03 AND NEW.send_follow_up_03 = TRUE THEN
-    NEW.send_follow_up_03_at := (NOW() AT TIME ZONE 'America/Sao_Paulo');
-  END IF;
-
-  IF NEW.approved IS DISTINCT FROM OLD.approved AND NEW.approved = TRUE THEN
-    NEW.approved_at := (NOW() AT TIME ZONE 'America/Sao_Paulo');
-  END IF;
-
-  IF NEW.purchased IS DISTINCT FROM OLD.purchased AND NEW.purchased = TRUE THEN
-    NEW.purchased_at := (NOW() AT TIME ZONE 'America/Sao_Paulo');
-  END IF;
-
-IF NEW.send_docs IS DISTINCT FROM OLD.send_docs AND NEW.send_docs = TRUE THEN
-    NEW.docs_received_at := (NOW() AT TIME ZONE 'America/Sao_Paulo');
-  END IF;
+  -- Insere o registro na tabela followup_control
+  INSERT INTO followup_control (
+    lead_id,
+    tentativa_atual,
+    proximo_followup_em,
+    status,
+    created_at,
+    updated_at
+  ) VALUES (
+    NEW.id,
+    1,
+    NOW() + (intervalo || ' days')::interval,
+    'ativo',
+    NOW(),
+    NOW()
+  );
 
   RETURN NEW;
 END;
 $$;
 
 
-ALTER FUNCTION public.update_event_timestamps() OWNER TO postgres;
+ALTER FUNCTION public.insere_followup_control() OWNER TO postgres;
+
+--
+-- Name: update_atualizado_em(); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.update_atualizado_em() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  NEW.atualizado_em := NOW();
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION public.update_atualizado_em() OWNER TO postgres;
+
+--
+-- Name: update_updated_at_column(); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.update_updated_at_column() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  -- Atualiza o campo updated_at para o timestamp atual em UTC-3 (America/Sao_Paulo)
+  NEW.updated_at := (CURRENT_TIMESTAMP AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo');
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION public.update_updated_at_column() OWNER TO postgres;
 
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
 
 --
--- Name: coldlist; Type: TABLE; Schema: public; Owner: postgres
+-- Name: agendamentos; Type: TABLE; Schema: public; Owner: postgres
 --
 
-CREATE TABLE public.coldlist (
+CREATE TABLE public.agendamentos (
     id integer NOT NULL,
-    name character varying(255),
-    phone character varying(50),
-    created_at timestamp without time zone DEFAULT now(),
-    sent boolean DEFAULT false,
-    paused boolean DEFAULT false,
-    funnel_step integer DEFAULT 1
+    lead_id integer NOT NULL,
+    data_hora timestamp without time zone NOT NULL,
+    status character varying(50) DEFAULT 'agendado'::character varying,
+    criado_em timestamp without time zone DEFAULT now(),
+    atualizado_em timestamp without time zone DEFAULT now(),
+    notificacao_01 boolean DEFAULT false,
+    notificacao_02 boolean DEFAULT false,
+    id_evento character varying(50)
 );
 
 
-ALTER TABLE public.coldlist OWNER TO postgres;
+ALTER TABLE public.agendamentos OWNER TO postgres;
 
 --
--- Name: coldlist_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+-- Name: agendamentos_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
 
-CREATE SEQUENCE public.coldlist_id_seq
+CREATE SEQUENCE public.agendamentos_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -236,13 +137,94 @@ CREATE SEQUENCE public.coldlist_id_seq
     CACHE 1;
 
 
-ALTER TABLE public.coldlist_id_seq OWNER TO postgres;
+ALTER TABLE public.agendamentos_id_seq OWNER TO postgres;
 
 --
--- Name: coldlist_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+-- Name: agendamentos_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
 
-ALTER SEQUENCE public.coldlist_id_seq OWNED BY public.coldlist.id;
+ALTER SEQUENCE public.agendamentos_id_seq OWNED BY public.agendamentos.id;
+
+
+--
+-- Name: config; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.config (
+    id integer NOT NULL,
+    max_tentativas integer DEFAULT 5 NOT NULL,
+    intervalo_dias integer DEFAULT 3 NOT NULL,
+    ativo boolean DEFAULT true,
+    created_at timestamp without time zone DEFAULT now(),
+    updated_at timestamp without time zone DEFAULT now(),
+    prompt text,
+    exemplos text,
+    faq text,
+    url_whatsapp character varying(50)
+);
+
+
+ALTER TABLE public.config OWNER TO postgres;
+
+--
+-- Name: config_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.config_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.config_id_seq OWNER TO postgres;
+
+--
+-- Name: config_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.config_id_seq OWNED BY public.config.id;
+
+
+--
+-- Name: followup_control; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.followup_control (
+    id integer NOT NULL,
+    lead_id integer NOT NULL,
+    tentativa_atual integer DEFAULT 1,
+    proximo_followup_em timestamp without time zone NOT NULL,
+    status character varying(20) DEFAULT 'ativo'::character varying,
+    created_at timestamp without time zone DEFAULT now(),
+    updated_at timestamp without time zone DEFAULT now()
+);
+
+
+ALTER TABLE public.followup_control OWNER TO postgres;
+
+--
+-- Name: followup_control_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.followup_control_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.followup_control_id_seq OWNER TO postgres;
+
+--
+-- Name: followup_control_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.followup_control_id_seq OWNED BY public.followup_control.id;
 
 
 --
@@ -251,34 +233,11 @@ ALTER SEQUENCE public.coldlist_id_seq OWNED BY public.coldlist.id;
 
 CREATE TABLE public.leads (
     id integer NOT NULL,
-    name character varying NOT NULL,
-    phone_number character varying,
-    funnel_step integer DEFAULT 1,
+    nome character varying(255) NOT NULL,
+    telefone character varying(50) NOT NULL,
+    qualificado boolean DEFAULT false,
     created_at timestamp without time zone DEFAULT now(),
-    updated_at timestamp without time zone DEFAULT now(),
-    email character varying,
-    send_docs boolean DEFAULT false,
-    send_follow_up_01 boolean DEFAULT false,
-    approved boolean DEFAULT false,
-    purchased boolean DEFAULT false,
-    status character varying(50) DEFAULT NULL::character varying,
-    send_follow_up_02 boolean DEFAULT false,
-    send_materials_at timestamp without time zone,
-    send_follow_up_01_at timestamp without time zone,
-    send_follow_up_02_at timestamp without time zone,
-    send_follow_up_03_at timestamp without time zone,
-    approved_at timestamp without time zone,
-    purchased_at timestamp without time zone,
-    send_follow_up_03 boolean DEFAULT false,
-    docs_received_at timestamp without time zone,
-    material_sent boolean DEFAULT false,
-    drive_id character varying(100) DEFAULT NULL::character varying,
-    follow_up_docs_pendente_01 boolean DEFAULT false,
-    follow_up_docs_pendente_01_at timestamp without time zone,
-    paused boolean DEFAULT false,
-    ctwaclid character varying(150) DEFAULT NULL::character varying,
-    follow_up_docs_pendente_02 boolean DEFAULT false,
-    follow_up_docs_pendente_02_at timestamp without time zone
+    updated_at timestamp without time zone DEFAULT now()
 );
 
 
@@ -307,23 +266,26 @@ ALTER SEQUENCE public.leads_id_seq OWNED BY public.leads.id;
 
 
 --
--- Name: n8n_chat_histories; Type: TABLE; Schema: public; Owner: postgres
+-- Name: users; Type: TABLE; Schema: public; Owner: postgres
 --
 
-CREATE TABLE public.n8n_chat_histories (
+CREATE TABLE public.users (
     id integer NOT NULL,
-    session_id character varying(255) NOT NULL,
-    message jsonb NOT NULL
+    nome character varying(255),
+    telefone character varying(50),
+    created_at timestamp without time zone DEFAULT now(),
+    updated_at timestamp without time zone DEFAULT now(),
+    email character varying(50)
 );
 
 
-ALTER TABLE public.n8n_chat_histories OWNER TO postgres;
+ALTER TABLE public.users OWNER TO postgres;
 
 --
--- Name: n8n_chat_histories_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+-- Name: users_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
 
-CREATE SEQUENCE public.n8n_chat_histories_id_seq
+CREATE SEQUENCE public.users_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -332,20 +294,34 @@ CREATE SEQUENCE public.n8n_chat_histories_id_seq
     CACHE 1;
 
 
-ALTER TABLE public.n8n_chat_histories_id_seq OWNER TO postgres;
+ALTER TABLE public.users_id_seq OWNER TO postgres;
 
 --
--- Name: n8n_chat_histories_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+-- Name: users_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
 
-ALTER SEQUENCE public.n8n_chat_histories_id_seq OWNED BY public.n8n_chat_histories.id;
+ALTER SEQUENCE public.users_id_seq OWNED BY public.users.id;
 
 
 --
--- Name: coldlist id; Type: DEFAULT; Schema: public; Owner: postgres
+-- Name: agendamentos id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
-ALTER TABLE ONLY public.coldlist ALTER COLUMN id SET DEFAULT nextval('public.coldlist_id_seq'::regclass);
+ALTER TABLE ONLY public.agendamentos ALTER COLUMN id SET DEFAULT nextval('public.agendamentos_id_seq'::regclass);
+
+
+--
+-- Name: config id; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.config ALTER COLUMN id SET DEFAULT nextval('public.config_id_seq'::regclass);
+
+
+--
+-- Name: followup_control id; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.followup_control ALTER COLUMN id SET DEFAULT nextval('public.followup_control_id_seq'::regclass);
 
 
 --
@@ -356,18 +332,34 @@ ALTER TABLE ONLY public.leads ALTER COLUMN id SET DEFAULT nextval('public.leads_
 
 
 --
--- Name: n8n_chat_histories id; Type: DEFAULT; Schema: public; Owner: postgres
+-- Name: users id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
-ALTER TABLE ONLY public.n8n_chat_histories ALTER COLUMN id SET DEFAULT nextval('public.n8n_chat_histories_id_seq'::regclass);
+ALTER TABLE ONLY public.users ALTER COLUMN id SET DEFAULT nextval('public.users_id_seq'::regclass);
 
 
 --
--- Name: coldlist coldlist_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: agendamentos agendamentos_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
-ALTER TABLE ONLY public.coldlist
-    ADD CONSTRAINT coldlist_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.agendamentos
+    ADD CONSTRAINT agendamentos_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: config config_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.config
+    ADD CONSTRAINT config_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: followup_control followup_control_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.followup_control
+    ADD CONSTRAINT followup_control_pkey PRIMARY KEY (id);
 
 
 --
@@ -379,39 +371,62 @@ ALTER TABLE ONLY public.leads
 
 
 --
--- Name: n8n_chat_histories n8n_chat_histories_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
-ALTER TABLE ONLY public.n8n_chat_histories
-    ADD CONSTRAINT n8n_chat_histories_pkey PRIMARY KEY (id);
-
-
---
--- Name: leads trg_set_follow_up_docs_pendente_01_at; Type: TRIGGER; Schema: public; Owner: postgres
---
-
-CREATE TRIGGER trg_set_follow_up_docs_pendente_01_at BEFORE UPDATE ON public.leads FOR EACH ROW EXECUTE FUNCTION public.set_follow_up_docs_pendente_01_at();
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_pkey PRIMARY KEY (id);
 
 
 --
--- Name: leads trg_set_follow_up_docs_pendente_02_at; Type: TRIGGER; Schema: public; Owner: postgres
+-- Name: leads trg_insere_followup_control; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
-CREATE TRIGGER trg_set_follow_up_docs_pendente_02_at BEFORE UPDATE ON public.leads FOR EACH ROW EXECUTE FUNCTION public.set_follow_up_docs_pendente_02_at();
-
-
---
--- Name: leads trg_set_updated_at; Type: TRIGGER; Schema: public; Owner: postgres
---
-
-CREATE TRIGGER trg_set_updated_at BEFORE UPDATE ON public.leads FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+CREATE TRIGGER trg_insere_followup_control AFTER INSERT ON public.leads FOR EACH ROW EXECUTE FUNCTION public.insere_followup_control();
 
 
 --
--- Name: leads trg_update_event_timestamps; Type: TRIGGER; Schema: public; Owner: postgres
+-- Name: agendamentos trg_update_atualizado_em_agendamentos; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
-CREATE TRIGGER trg_update_event_timestamps BEFORE UPDATE ON public.leads FOR EACH ROW EXECUTE FUNCTION public.update_event_timestamps();
+CREATE TRIGGER trg_update_atualizado_em_agendamentos BEFORE UPDATE ON public.agendamentos FOR EACH ROW EXECUTE FUNCTION public.update_atualizado_em();
+
+
+--
+-- Name: config trg_update_updated_at_config; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE TRIGGER trg_update_updated_at_config BEFORE UPDATE ON public.config FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+
+--
+-- Name: followup_control trg_update_updated_at_followup_control; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE TRIGGER trg_update_updated_at_followup_control BEFORE UPDATE ON public.followup_control FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+
+--
+-- Name: leads trg_update_updated_at_leads; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE TRIGGER trg_update_updated_at_leads BEFORE UPDATE ON public.leads FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+
+--
+-- Name: agendamentos agendamentos_lead_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.agendamentos
+    ADD CONSTRAINT agendamentos_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES public.leads(id) ON DELETE CASCADE;
+
+
+--
+-- Name: followup_control followup_control_lead_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.followup_control
+    ADD CONSTRAINT followup_control_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES public.leads(id) ON DELETE CASCADE;
 
 
 --
